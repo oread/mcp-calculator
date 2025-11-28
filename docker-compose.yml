@@ -1,0 +1,52 @@
+services:
+  # Calculator Tool
+  calculator:
+    build: .
+    container_name: mcp-calculator
+    command: python mcp_pipe.py calculator.py
+    environment:
+      - MCP_ENDPOINT=${MCP_ENDPOINT}
+    restart: unless-stopped
+    networks:
+      - mcp-network
+
+  # Dataverse Tool
+  dataverse:
+    build: .
+    container_name: mcp-dataverse
+    command: python mcp_pipe.py dataverse.py
+    environment:
+      - MCP_ENDPOINT=${MCP_ENDPOINT}
+      - DATAVERSE_URL=${DATAVERSE_URL:-}
+      - CLIENT_ID=${CLIENT_ID:-}
+      - CLIENT_SECRET=${CLIENT_SECRET:-}
+      - TENANT_ID=${TENANT_ID:-}
+    restart: unless-stopped
+    networks:
+      - mcp-network
+
+  # VNExpress News Tool
+  vnexpress:
+    build: .
+    container_name: mcp-vnexpress
+    command: python mcp_pipe.py vnexpress.py
+    environment:
+      - MCP_ENDPOINT=${MCP_ENDPOINT}
+    restart: unless-stopped
+    networks:
+      - mcp-network
+
+  # Zing MP3 Tool
+  zingmp3:
+    build: .
+    container_name: mcp-zingmp3
+    command: python mcp_pipe.py zingmp3.py
+    environment:
+      - MCP_ENDPOINT=${MCP_ENDPOINT}
+    restart: unless-stopped
+    networks:
+      - mcp-network
+
+networks:
+  mcp-network:
+    driver: bridge

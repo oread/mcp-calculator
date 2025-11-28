@@ -1,14 +1,42 @@
-# MCP Sample Project | MCP 示例项目
+# MCP-Tools | MCP工具集
 
-A powerful interface for extending AI capabilities through remote control, calculations, email operations, knowledge search, and more.
+A comprehensive collection of MCP (Model Context Protocol) tools for extending AI capabilities with Dataverse integration, news aggregation, music streaming, calculations, and more.
 
-一个强大的接口，用于通过远程控制、计算、邮件操作、知识搜索等方式扩展AI能力。
+一个全面的MCP工具集合，通过Dataverse集成、新闻聚合、音乐流媒体、计算等方式扩展AI能力。
 
 ## Overview | 概述
 
 MCP (Model Context Protocol) is a protocol that allows servers to expose tools that can be invoked by language models. Tools enable models to interact with external systems, such as querying databases, calling APIs, or performing computations. Each tool is uniquely identified by a name and includes metadata describing its schema.
 
 MCP（模型上下文协议）是一个允许服务器向语言模型暴露可调用工具的协议。这些工具使模型能够与外部系统交互，例如查询数据库、调用API或执行计算。每个工具都由一个唯一的名称标识，并包含描述其模式的元数据。
+
+## Available Tools | 可用工具
+
+### 🧮 Calculator
+Mathematical calculations with Python expressions
+- Support for math and random modules
+- Safe expression evaluation
+
+### 📊 Dataverse
+Microsoft Dataverse/Dynamics 365 integration
+- OAuth 2.0 client credentials authentication
+- Full CRUD operations (Create, Read, Update, Delete)
+- OData query support
+- Automatic token management
+
+### 📰 VNExpress
+Vietnamese news aggregation from VNExpress.net
+- Latest news by category
+- Search functionality
+- Full article content extraction
+- Trending news
+
+### 🎵 Zing MP3
+Music streaming integration with Zing MP3
+- Song search
+- Artist and playlist browsing
+- Music charts (realtime, weekly, by genre)
+- Browser integration
 
 ## Features | 特性
 
@@ -18,6 +46,7 @@ MCP（模型上下文协议）是一个允许服务器向语言模型暴露可�
 - 🛠️ Easy-to-use tool creation interface | 简单易用的工具创建接口
 - 🔒 Secure WebSocket communication | 安全的WebSocket通信
 - ⚙️ Multiple transport types support (stdio/sse/http) | 支持多种传输类型（stdio/sse/http）
+- 🐳 Docker support for easy deployment | Docker支持，便于部署
 
 ## Quick Start | 快速开始
 
@@ -28,7 +57,8 @@ pip install -r requirements.txt
 
 2. Set up environment variables | 设置环境变量:
 ```bash
-export MCP_ENDPOINT=wss://api.xiaozhi.me/mcp/?token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjU3OTg3MiwiYWdlbnRJZCI6OTQ0NTMzLCJlbmRwb2ludElkIjoiYWdlbnRfOTQ0NTMzIiwicHVycG9zZSI6Im1jcC1lbmRwb2ludCIsImlhdCI6MTc2NDE2ODc0OCwiZXhwIjoxNzk1NzI2MzQ4fQ.n2G45kxx7ckklQ1ciYpV15_bJ5z12VXVfSbpFAD4RkBWLw1nGOk3ruLbuL56JX0ip4py_Aaloz4fAAhGmwiitA
+export MCP_ENDPOINT=ws://192.168.1.11:8004/mcp_endpoint/mcp/?token=jR1BVACU%2B8gb7%2BBgAOqYHwtssGQWvlD%2BQQK4HEdW%2F2dThXgPoaMlcZ%2BA4rp4sl9D
+
 ```
 
 3. Run the calculator example | 运行计算器示例:
@@ -48,8 +78,13 @@ python mcp_pipe.py
 ## Project Structure | 项目结构
 
 - `mcp_pipe.py`: Main communication pipe that handles WebSocket connections and process management | 处理WebSocket连接和进程管理的主通信管道
-- `calculator.py`: Example MCP tool implementation for mathematical calculations | 用于数学计算的MCP工具示例实现
+- `calculator.py`: Mathematical calculation tool | 数学计算工具
+- `dataverse.py`: Microsoft Dataverse/D365 integration tool | Dataverse/D365集成工具
+- `vnexpress.py`: Vietnamese news aggregation tool | 越南新闻聚合工具
+- `zingmp3.py`: Music streaming tool | 音乐流媒体工具
 - `requirements.txt`: Project dependencies | 项目依赖
+- `Dockerfile`: Docker container configuration | Docker容器配置
+- `docker-compose.yml`: Docker Compose orchestration | Docker Compose编排
 
 ## Config-driven Servers | 通过配置驱动的服务
 
@@ -82,11 +117,34 @@ if __name__ == "__main__":
 ## Use Cases | 使用场景
 
 - Mathematical calculations | 数学计算
-- Email operations | 邮件操作
-- Knowledge base search | 知识库搜索
-- Remote device control | 远程设备控制
-- Data processing | 数据处理
+- Dataverse/Dynamics 365 data management | Dataverse/Dynamics 365数据管理
+- News monitoring and aggregation | 新闻监控和聚合
+- Music discovery and streaming | 音乐发现和流媒体
+- Data processing and analysis | 数据处理和分析
 - Custom tool integration | 自定义工具集成
+
+## Docker Deployment | Docker部署
+
+### Build and Run with Docker
+
+```bash
+# Build the image
+docker build -t mcp-tools .
+
+# Run a specific tool
+docker run -e MCP_ENDPOINT="your-endpoint-url" mcp-tools calculator.py
+
+# Run with docker-compose
+docker-compose up -d
+```
+
+### Environment Variables
+
+- `MCP_ENDPOINT`: WebSocket endpoint URL (required)
+- `DATAVERSE_URL`: Dataverse organization URL (for Dataverse tool)
+- `CLIENT_ID`: Azure AD client ID (for Dataverse tool)
+- `CLIENT_SECRET`: Azure AD client secret (for Dataverse tool)
+- `TENANT_ID`: Azure AD tenant ID (for Dataverse tool)
 
 ## Requirements | 环境要求
 

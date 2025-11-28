@@ -1,13 +1,13 @@
-# vnexpress.py
-from fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 import sys
 import logging
 import requests
 from bs4 import BeautifulSoup
-from typing import Optional, Dict, Any, List
-import webbrowser
+from datetime import datetime
+import json
+import re
 
-logger = logging.getLogger('VNExpress')
+logger = logging.getLogger('VnExpress')
 
 # Fix UTF-8 encoding for Windows console
 if sys.platform == 'win32':
@@ -15,456 +15,280 @@ if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8')
 
 # Create an MCP server
-mcp = FastMCP("VNExpress")
-
+mcp = FastMCP("VnExpress")
 
 @mcp.tool()
-def get_latest_news(
-    category: Optional[str] = "trang-chu",
-    limit: Optional[int] = 10
-) -> dict:
+def get_vnexpress_news(category: str = "home", limit: int = 10) -> dict:
     """
-    Get latest news from VNExpress.net.
+    Lấy tin tức mới nhất từ VnExpress.
     
-    Args:
-        category: News category. Options:
-                 - 'trang-chu': Homepage (default)
-                 - 'thoi-su': Politics
-                 - 'goc-nhin': Perspectives
-                 - 'the-gioi': World
-                 - 'kinh-doanh': Business
-                 - 'khoa-hoc': Science
-                 - 'giai-tri': Entertainment
-                 - 'the-thao': Sports
-                 - 'phap-luat': Law
-                 - 'giao-duc': Education
-                 - 'suc-khoe': Health
-                 - 'gia-dinh': Family
-                 - 'du-lich': Travel
-                 - 'so-hoa': Digital
-                 - 'xe': Automotive
-        limit: Maximum number of articles to return (default: 10)
-    
-    Returns:
-        Dictionary with success status and list of news articles
+    Categories:
+    - home: Trang chủ (tin nổi bật)
+    - thoi-su: Thời sự
+    - goc-nhin: Góc nhìn  
+    - the-gioi: Thế giới
+    - kinh-doanh: Kinh doanh
+    - bat-dong-san: Bất động sản
+    - khoa-hoc: Khoa học
+    - giai-tri: Giải trí
+    - the-thao: Thể thao
+    - phap-luat: Pháp luật
+    - giao-duc: Giáo dục
+    - suc-khoe: Sức khỏe
+    - doi-song: Đời sống
+    - du-lich: Du lịch
+    - so-hoa: Số hóa
+    - xe: Xe
     """
     try:
-        # Build URL
-        if category == "trang-chu":
-            url = "https://vnexpress.net"
+        # Xây dựng URL dựa trên category
+        if category == "home":
+            url = "https://vnexpress.net/"
         else:
             url = f"https://vnexpress.net/{category}"
         
-        # Set headers to mimic browser
+        logger.info(f"Fetching news from: {url}")
+        
+        # Headers để giả lập browser
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
         }
         
-        # Fetch the page
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
         response.encoding = 'utf-8'
         
         # Parse HTML
-        soup = BeautifulSoup(response.text, 'html.parser')
+        soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Find news articles
         articles = []
         
-        # VNExpress uses different classes for articles
-        article_elements = soup.find_all('article', class_='item-news', limit=limit * 2)
+        # Tìm các bài viết (selector có thể thay đổi theo cấu trúc VnExpress)
+        # Thử nhiều selector khác nhau
+        selectors = [
+            'article.item-news',
+            '.item-news',
+            '.title-news a',
+            'h3.title-news a',
+            '.item-news .title-news a'
+        ]
         
-        for article in article_elements[:limit]:
+        found_articles = []
+        for selector in selectors:
+            found_articles = soup.select(selector)
+            if found_articles:
+                logger.info(f"Found {len(found_articles)} articles with selector: {selector}")
+                break
+        
+        if not found_articles:
+            # Fallback: tìm tất cả links có chứa từ khóa tin tức
+            found_articles = soup.find_all('a', href=re.compile(r'\.html$'))
+            logger.info(f"Fallback: Found {len(found_articles)} potential article links")
+        
+        count = 0
+        for item in found_articles:
+            if count >= limit:
+                break
+                
             try:
-                # Extract title and link
-                title_tag = article.find('h3', class_='title-news') or article.find('h2', class_='title-news')
-                if not title_tag:
+                # Xử lý khác nhau dựa trên cấu trúc element
+                if item.name == 'a':
+                    link_elem = item
+                    title = item.get_text(strip=True)
+                else:
+                    link_elem = item.find('a')
+                    title_elem = item.find(['h1', 'h2', 'h3', '.title-news'])
+                    title = title_elem.get_text(strip=True) if title_elem else link_elem.get_text(strip=True)
+                
+                if not link_elem or not title:
                     continue
-                    
-                link_tag = title_tag.find('a')
-                if not link_tag:
+                
+                href = link_elem.get('href')
+                if not href:
                     continue
                 
-                title = link_tag.get_text(strip=True)
-                link = link_tag.get('href', '')
+                # Tạo URL đầy đủ
+                if href.startswith('/'):
+                    full_url = f"https://vnexpress.net{href}"
+                elif href.startswith('http'):
+                    full_url = href
+                else:
+                    full_url = f"https://vnexpress.net/{href}"
                 
-                # Make sure link is absolute
-                if link and not link.startswith('http'):
-                    link = 'https://vnexpress.net' + link
+                # Lấy thêm thông tin nếu có
+                description = ""
+                time_str = ""
                 
-                # Extract description
-                desc_tag = article.find('p', class_='description')
-                description = desc_tag.get_text(strip=True) if desc_tag else ""
+                # Tìm description
+                desc_elem = None
+                if item.name != 'a':
+                    desc_elem = item.find(['p', '.description', '.lead'])
+                if desc_elem:
+                    description = desc_elem.get_text(strip=True)
                 
-                # Extract thumbnail
-                thumb_tag = article.find('img')
-                thumbnail = thumb_tag.get('data-src') or thumb_tag.get('src') if thumb_tag else ""
+                # Tìm thời gian
+                time_elem = None
+                if item.name != 'a':
+                    time_elem = item.find(['time', '.time'])
+                if time_elem:
+                    time_str = time_elem.get_text(strip=True)
                 
-                articles.append({
-                    'title': title,
-                    'link': link,
-                    'description': description,
-                    'thumbnail': thumbnail
-                })
+                # Lọc bỏ những bài không phải tin tức chính
+                if len(title) < 10 or 'javascript:' in href:
+                    continue
+                
+                article = {
+                    "title": title,
+                    "url": full_url,
+                    "description": description,
+                    "time": time_str,
+                    "category": category
+                }
+                
+                articles.append(article)
+                count += 1
                 
             except Exception as e:
-                logger.warning(f"Error parsing article: {str(e)}")
+                logger.warning(f"Error processing article: {e}")
                 continue
         
-        logger.info(f"Retrieved {len(articles)} articles from category: {category}")
+        logger.info(f"Successfully extracted {len(articles)} articles from {category}")
         
         return {
             "success": True,
             "category": category,
-            "count": len(articles),
+            "total_articles": len(articles),
             "articles": articles,
-            "source_url": url
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "source": "VnExpress.net"
         }
         
     except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to fetch news: {str(e)}")
-        return {
-            "success": False,
-            "error": f"Failed to fetch news: {str(e)}"
-        }
+        logger.error(f"Network error: {e}")
+        return {"success": False, "error": f"Network error: {str(e)}"}
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
+        logger.error(f"Unexpected error: {e}")
+        return {"success": False, "error": f"Unexpected error: {str(e)}"}
 
 @mcp.tool()
-def search_news(
-    query: str,
-    limit: Optional[int] = 10
-) -> dict:
-    """
-    Search for news articles on VNExpress.net.
-    
-    Args:
-        query: Search keywords
-        limit: Maximum number of results to return (default: 10)
-    
-    Returns:
-        Dictionary with success status and search results
-    """
+def get_article_content(url: str) -> dict:
+    """Lấy nội dung chi tiết của một bài báo từ URL VnExpress"""
     try:
-        import urllib.parse
+        logger.info(f"Fetching article content from: {url}")
         
-        # Build search URL
-        encoded_query = urllib.parse.quote(query)
-        search_url = f"https://vnexpress.net/tim-kiem?q={encoded_query}"
-        
-        # Set headers
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
-        # Fetch search results
-        response = requests.get(search_url, headers=headers, timeout=10)
+        response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
         response.encoding = 'utf-8'
         
-        # Parse HTML
-        soup = BeautifulSoup(response.text, 'html.parser')
+        soup = BeautifulSoup(response.content, 'html.parser')
         
-        # Find search results
-        articles = []
-        article_elements = soup.find_all('article', class_='item-news', limit=limit * 2)
+        # Tìm tiêu đề
+        title_elem = soup.find(['h1', '.title-detail'])
+        title = title_elem.get_text(strip=True) if title_elem else "Không tìm thấy tiêu đề"
         
-        for article in article_elements[:limit]:
-            try:
-                # Extract title and link
-                title_tag = article.find('h3', class_='title-news') or article.find('h2', class_='title-news')
-                if not title_tag:
-                    continue
-                    
-                link_tag = title_tag.find('a')
-                if not link_tag:
-                    continue
-                
-                title = link_tag.get_text(strip=True)
-                link = link_tag.get('href', '')
-                
-                if link and not link.startswith('http'):
-                    link = 'https://vnexpress.net' + link
-                
-                # Extract description
-                desc_tag = article.find('p', class_='description')
-                description = desc_tag.get_text(strip=True) if desc_tag else ""
-                
-                articles.append({
-                    'title': title,
-                    'link': link,
-                    'description': description
-                })
-                
-            except Exception as e:
-                logger.warning(f"Error parsing search result: {str(e)}")
-                continue
+        # Tìm mô tả/lead
+        description_elem = soup.find(['.description', '.lead'])
+        description = description_elem.get_text(strip=True) if description_elem else ""
         
-        logger.info(f"Found {len(articles)} articles for query: {query}")
+        # Tìm nội dung chính
+        content_elem = soup.find(['.fck_detail', '.content-detail', '.Normal'])
+        content = ""
+        if content_elem:
+            # Lấy text từ các paragraph
+            paragraphs = content_elem.find_all('p')
+            content = '\n\n'.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
         
-        return {
-            "success": True,
-            "query": query,
-            "count": len(articles),
-            "articles": articles,
-            "search_url": search_url
-        }
+        # Tìm thời gian
+        time_elem = soup.find(['time', '.date'])
+        publish_time = time_elem.get_text(strip=True) if time_elem else ""
         
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Search failed: {str(e)}")
-        return {
-            "success": False,
-            "error": f"Search failed: {str(e)}"
-        }
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-
-@mcp.tool()
-def get_article_content(
-    article_url: str
-) -> dict:
-    """
-    Get full content of a specific article from VNExpress.net.
-    
-    Args:
-        article_url: Full URL of the article
-    
-    Returns:
-        Dictionary with success status and article content
-    """
-    try:
-        if not article_url.startswith('http'):
-            return {
-                "success": False,
-                "error": "Invalid URL. Please provide a complete article URL"
-            }
-        
-        # Set headers
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        
-        # Fetch article
-        response = requests.get(article_url, headers=headers, timeout=10)
-        response.raise_for_status()
-        response.encoding = 'utf-8'
-        
-        # Parse HTML
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Extract title
-        title_tag = soup.find('h1', class_='title-detail')
-        title = title_tag.get_text(strip=True) if title_tag else ""
-        
-        # Extract description/summary
-        desc_tag = soup.find('p', class_='description')
-        description = desc_tag.get_text(strip=True) if desc_tag else ""
-        
-        # Extract author and date
-        author_tag = soup.find('p', class_='author_mail')
-        author = author_tag.get_text(strip=True) if author_tag else ""
-        
-        # Extract content
-        content_div = soup.find('article', class_='fck_detail')
-        content_paragraphs = []
-        
-        if content_div:
-            # Get all paragraphs
-            paragraphs = content_div.find_all('p', class_='Normal')
-            for p in paragraphs:
-                text = p.get_text(strip=True)
-                if text:
-                    content_paragraphs.append(text)
-        
-        content = '\n\n'.join(content_paragraphs)
-        
-        logger.info(f"Retrieved article: {title}")
+        # Tìm tác giả
+        author_elem = soup.find(['.author', '.Normal b'])
+        author = author_elem.get_text(strip=True) if author_elem else ""
         
         return {
             "success": True,
             "title": title,
             "description": description,
+            "content": content[:2000] + "..." if len(content) > 2000 else content,  # Giới hạn độ dài
             "author": author,
-            "content": content,
-            "url": article_url,
-            "content_length": len(content)
-        }
-        
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to fetch article: {str(e)}")
-        return {
-            "success": False,
-            "error": f"Failed to fetch article: {str(e)}"
-        }
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-
-@mcp.tool()
-def open_article(
-    article_url: str
-) -> dict:
-    """
-    Open an article in the default browser.
-    
-    Args:
-        article_url: Full URL of the article
-    
-    Returns:
-        Dictionary with success status
-    """
-    try:
-        if not article_url.startswith('http'):
-            return {
-                "success": False,
-                "error": "Invalid URL. Please provide a complete article URL"
-            }
-        
-        webbrowser.open(article_url)
-        
-        logger.info(f"Opening article: {article_url}")
-        
-        return {
-            "success": True,
-            "message": "Article opened in default browser",
-            "url": article_url
+            "publish_time": publish_time,
+            "url": url,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
     except Exception as e:
-        logger.error(f"Failed to open article: {str(e)}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
+        logger.error(f"Error fetching article content: {e}")
+        return {"success": False, "error": str(e)}
 
-
-@mcp.tool()
-def get_trending_news(
-    limit: Optional[int] = 10
-) -> dict:
-    """
-    Get trending/most read news from VNExpress.net.
-    
-    Args:
-        limit: Maximum number of articles to return (default: 10)
-    
-    Returns:
-        Dictionary with success status and trending articles
-    """
+@mcp.tool() 
+def search_vnexpress_news(keyword: str, limit: int = 5) -> dict:
+    """Tìm kiếm tin tức trên VnExpress theo từ khóa"""
     try:
-        url = "https://vnexpress.net"
+        # URL tìm kiếm VnExpress
+        search_url = f"https://timkiem.vnexpress.net/?q={keyword}"
+        
+        logger.info(f"Searching VnExpress for: {keyword}")
         
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
         
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(search_url, headers=headers, timeout=15)
         response.raise_for_status()
         response.encoding = 'utf-8'
         
-        soup = BeautifulSoup(response.text, 'html.parser')
+        soup = BeautifulSoup(response.content, 'html.parser')
         
         articles = []
+        # Tìm kết quả tìm kiếm
+        search_results = soup.find_all(['article', '.item-news'], limit=limit)
         
-        # Look for most read section
-        most_read = soup.find('div', class_='box-category') or soup.find('div', class_='most-read')
-        
-        if most_read:
-            article_elements = most_read.find_all('article', limit=limit)
-            
-            for article in article_elements:
-                try:
-                    title_tag = article.find('h3') or article.find('h2')
-                    if not title_tag:
-                        continue
-                    
-                    link_tag = title_tag.find('a')
-                    if not link_tag:
-                        continue
-                    
-                    title = link_tag.get_text(strip=True)
-                    link = link_tag.get('href', '')
-                    
-                    if link and not link.startswith('http'):
-                        link = 'https://vnexpress.net' + link
-                    
-                    articles.append({
-                        'title': title,
-                        'link': link
-                    })
-                    
-                except Exception as e:
-                    logger.warning(f"Error parsing trending article: {str(e)}")
+        for item in search_results:
+            try:
+                link_elem = item.find('a')
+                if not link_elem:
                     continue
-        
-        logger.info(f"Retrieved {len(articles)} trending articles")
+                    
+                title = link_elem.get_text(strip=True)
+                href = link_elem.get('href')
+                
+                if href and not href.startswith('http'):
+                    href = f"https://vnexpress.net{href}"
+                
+                description_elem = item.find(['p', '.description'])
+                description = description_elem.get_text(strip=True) if description_elem else ""
+                
+                articles.append({
+                    "title": title,
+                    "url": href,
+                    "description": description,
+                    "keyword": keyword
+                })
+                
+            except Exception as e:
+                continue
         
         return {
             "success": True,
-            "count": len(articles),
-            "articles": articles
+            "keyword": keyword,
+            "total_results": len(articles),
+            "articles": articles,
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to fetch trending news: {str(e)}")
-        return {
-            "success": False,
-            "error": f"Failed to fetch trending news: {str(e)}"
-        }
     except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-
-@mcp.tool()
-def list_categories() -> dict:
-    """
-    List all available news categories on VNExpress.net.
-    
-    Returns:
-        Dictionary with success status and list of categories
-    """
-    categories = {
-        "trang-chu": "Homepage - Latest news",
-        "thoi-su": "Politics - National politics and current affairs",
-        "goc-nhin": "Perspectives - Opinions and analyses",
-        "the-gioi": "World - International news",
-        "kinh-doanh": "Business - Economy and business news",
-        "khoa-hoc": "Science - Technology and science",
-        "giai-tri": "Entertainment - Movies, music, celebrities",
-        "the-thao": "Sports - Sports news and updates",
-        "phap-luat": "Law - Legal news and crime",
-        "giao-duc": "Education - Education and learning",
-        "suc-khoe": "Health - Health and wellness",
-        "gia-dinh": "Family - Family and relationships",
-        "du-lich": "Travel - Tourism and travel guides",
-        "so-hoa": "Digital - Technology and gadgets",
-        "xe": "Automotive - Cars and motorcycles"
-    }
-    
-    return {
-        "success": True,
-        "categories": categories,
-        "count": len(categories)
-    }
-
+        logger.error(f"Search error: {e}")
+        return {"success": False, "error": str(e)}
 
 # Start the server
 if __name__ == "__main__":
