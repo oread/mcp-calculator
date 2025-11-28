@@ -28,7 +28,7 @@ pip install -r requirements.txt
 
 2. Set up environment variables | 设置环境变量:
 ```bash
-export MCP_ENDPOINT=<your_mcp_endpoint>
+export MCP_ENDPOINT=wss://api.xiaozhi.me/mcp/?token=eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjU3OTg3MiwiYWdlbnRJZCI6OTQ0NTMzLCJlbmRwb2ludElkIjoiYWdlbnRfOTQ0NTMzIiwicHVycG9zZSI6Im1jcC1lbmRwb2ludCIsImlhdCI6MTc2NDE2ODc0OCwiZXhwIjoxNzk1NzI2MzQ4fQ.n2G45kxx7ckklQ1ciYpV15_bJ5z12VXVfSbpFAD4RkBWLw1nGOk3ruLbuL56JX0ip4py_Aaloz4fAAhGmwiitA
 ```
 
 3. Run the calculator example | 运行计算器示例:
